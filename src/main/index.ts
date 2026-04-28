@@ -3,6 +3,15 @@ import { spawn, ChildProcess } from 'child_process'
 import { execSync } from 'child_process'
 import * as path from 'path'
 import * as net from 'net'
+import * as fs from 'fs'
+
+const envPath = path.join(__dirname, '../../.env')
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const [k, ...v] = line.split('=')
+    if (k && v.length) process.env[k.trim()] = v.join('=').trim()
+  }
+}
 
 type S = 'stopped' | 'starting' | 'running' | 'error'
 
