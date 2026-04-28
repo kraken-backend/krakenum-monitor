@@ -70,7 +70,7 @@ async function killPorts() {
       for (const line of out.split('\n')) {
         const pid = parseInt(line.trim())
         if (pid > 0) {
-          try { execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf8', windowsHide: true }) } catch {}
+          try { execSync(`taskkill /F /PID ${pid} 2>$null`, { encoding: 'utf8', windowsHide: true }) } catch {}
         }
       }
     } catch {}
@@ -104,8 +104,14 @@ async function startAll() {
     serviceProcs[idx-1] = spawn(cmds[i-1][0], cmds[i-1].slice(1), { cwd: dirs[i-1], shell: true, env: envs[i-1] })
     serviceProcs[idx-1]?.stdout?.on('data', d => log(idx, d.toString()))
     serviceProcs[idx-1]?.stderr?.on('data', d => log(idx, d.toString()))
-    serviceProcs[idx-1]?.on('close', code => { services[idx].status = code === 0 ? 'stopped' : 'error'; serviceProcs[idx-1] = null; checkAll() })
-    serviceProcs[idx-1]?.on('error', err => { services[idx].status = 'error'; log(idx, err.message); serviceProcs[idx-1] = null; checkAll() })
+    serviceProcs[idx-1]?.on('close', code => { 
+      services[idx].status = 'stopped'
+      serviceProcs[idx-1] = null 
+    })
+    serviceProcs[idx-1]?.on('error', err => { 
+      services[idx].status = 'stopped'
+      serviceProcs[idx-1] = null 
+    })
     await new Promise(resolve => setTimeout(resolve, 2500))
   }
   
