@@ -44,7 +44,7 @@ export default function App() {
 
   const getStatusColor = (status: ServiceStatus) => {
     switch (status) {
-      case 'running': return '#10b981'
+      case 'running': return '#f59e0b'
       case 'starting': return '#f59e0b'
       case 'error': return '#ef4444'
       default: return '#6b7280'
@@ -53,7 +53,7 @@ export default function App() {
 
   const getStatusText = (status: ServiceStatus) => {
     switch (status) {
-      case 'running': return 'RUNNING'
+      case 'running': return 'WAITING...'
       case 'starting': return 'LOADING...'
       case 'error': return 'ERROR'
       default: return 'STOPPED'
