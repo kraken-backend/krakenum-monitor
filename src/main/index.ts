@@ -17,6 +17,8 @@ type S = 'stopped' | 'starting' | 'running' | 'error'
 
 interface ServiceInfo { name: string; status: S; port: number; url: string; log: string[] }
 
+let allReady = false
+
 const services: ServiceInfo[] = [
   { name: 'Rust Node', status: 'stopped', port: 8088, url: '/gateway/status?mode=api', log: [] },
   { name: 'Go Gateway', status: 'stopped', port: 8090, url: '/gateway/status?mode=api', log: [] },
@@ -46,7 +48,8 @@ function logAll(msg: string) {
 }
 
 function send() {
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('status-update', services.map((s, i) => ({ name: s.name, status: s.status, port: s.port, logs: s.log.slice(-50) })))
+  const data = { services: services.map((s, i) => ({ name: s.name, status: s.status, port: s.port, logs: s.log.slice(-50) })), allReady }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('status-update', data)
 }
 
 async function verify(i: number): Promise<boolean> {
@@ -144,7 +147,9 @@ logAll('Starting tunnels + Vercel deploy...')
     logAll(`Poll ${poll + 1}: Blockchain=${bcState}, Wallet=${walletState}`)
     
     if (bcState === 'READY' && walletState === 'READY') {
+      allReady = true
       logAll('=== ALL READY ===')
+      send()
       break
     }
     if (bcState === 'ERROR' || walletState === 'ERROR' || bcState === 'FAILED' || walletState === 'FAILED') {
@@ -163,13 +168,15 @@ logAll('Starting tunnels + Vercel deploy...')
 
 async function stopAll() {
   logAll('=== STOP ===')
+  allReady = false
   for (let i = 0; i < 3; i++) { if (serviceProcs[i]) { try { serviceProcs[i]!.kill() } catch {} serviceProcs[i] = null }; services[i].status = 'stopped' }
   await killPorts()
   logAll('=== STOPPED ===')
   checkAll()
+  send()
 }
 
-ipcMain.handle('get-status', () => services.map((s, i) => ({ name: s.name, status: s.status, port: s.port, logs: s.log.slice(-50) })))
+ipcMain.handle('get-status', () => ({ services: services.map((s, i) => ({ name: s.name, status: s.status, port: s.port, logs: s.log.slice(-50) })), allReady }))
 ipcMain.on('start-all', () => startAll())
 ipcMain.on('stop-all', () => stopAll())
 

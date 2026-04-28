@@ -18,23 +18,25 @@ const defaultServices: ServiceInfo[] = [
 declare global {
   interface Window {
     api: {
-      getStatus: () => Promise<ServiceInfo[]>
+      getStatus: () => Promise<{ services: ServiceInfo[]; allReady: boolean }>
       startAll: () => void
       stopAll: () => void
-      onStatusUpdate: (cb: (services: ServiceInfo[]) => void) => void
+      onStatusUpdate: (cb: (data: { services: ServiceInfo[]; allReady: boolean }) => void) => void
     }
   }
 }
 
 export default function App() {
   const [services, setServices] = useState<ServiceInfo[]>(defaultServices)
+  const [allReady, setAllReady] = useState(false)
   const [selected, setSelected] = useState(0)
   const [lastCheck, setLastCheck] = useState('')
 
   useEffect(() => {
-    window.api.getStatus().then(setServices)
-    window.api.onStatusUpdate((updated) => {
-      setServices(updated)
+    window.api.getStatus().then(data => { setServices(data.services); setAllReady(data.allReady) })
+    window.api.onStatusUpdate((data) => {
+      setServices(data.services)
+      setAllReady(data.allReady)
       setLastCheck(new Date().toLocaleTimeString())
     })
   }, [])
@@ -42,7 +44,8 @@ export default function App() {
   const startAll = () => window.api.startAll()
   const stopAll = () => window.api.stopAll()
 
-  const getStatusColor = (status: ServiceStatus) => {
+  const getStatusColor = (status: ServiceStatus, isAllReady: boolean) => {
+    if (isAllReady) return '#10b981'
     switch (status) {
       case 'running': return '#f59e0b'
       case 'starting': return '#f59e0b'
@@ -51,7 +54,8 @@ export default function App() {
     }
   }
 
-  const getStatusText = (status: ServiceStatus) => {
+  const getStatusText = (status: ServiceStatus, isAllReady: boolean) => {
+    if (isAllReady) return 'READY!'
     switch (status) {
       case 'running': return 'WAITING...'
       case 'starting': return 'LOADING...'
@@ -83,7 +87,7 @@ export default function App() {
             >
               <span 
                 className={`status-indicator ${svc.status === 'starting' ? 'pulse' : ''}`}
-                style={{ background: getStatusColor(svc.status) }}
+                style={{ background: getStatusColor(svc.status, allReady) }}
               />
               <span className="service-name">{svc.name}</span>
               <span className="service-port">:{svc.port}</span>
@@ -97,9 +101,9 @@ export default function App() {
               <h2>{services[selected].name}</h2>
               <span 
                 className={`badge ${services[selected].status}`}
-                style={{ background: getStatusColor(services[selected].status) }}
+                style={{ background: getStatusColor(services[selected].status, allReady) }}
               >
-                {getStatusText(services[selected].status)}
+                {getStatusText(services[selected].status, allReady)}
               </span>
             </div>
             <div className="service-actions">
