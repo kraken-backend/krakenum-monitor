@@ -68,9 +68,11 @@ async function killPorts() {
   for (let pi = 0; pi < ps.length; pi++) {
     try {
       const out = execSync(`powershell -Command "Get-NetTCPConnection -LocalPort ${ps[pi]} -EA SilentlyContinue | Select-Object -ExpandProperty OwningProcess"`, { encoding: 'utf8', windowsHide: true })
-      for (let li = 0; li < out.split('\n').length; li++) {
-        const pid = parseInt(out.split('\n')[li].trim())
-        if (pid > 0) try { execSync(`taskkill /F /PID ${pid}`, { windowsHide: true }) } catch {}
+      for (const line of out.split('\n')) {
+        const pid = parseInt(line.trim())
+        if (pid > 0) {
+          try { execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf8', windowsHide: true }) } catch {}
+        }
       }
     } catch {}
   }
@@ -169,20 +171,16 @@ logAll('Starting tunnels + Vercel deploy...')
 async function stopAll() {
   logAll('=== STOP ===')
   allReady = false
-  for (let i = 0; i < 3; i++) { 
-    if (serviceProcs[i]) { 
-      try { 
-        serviceProcs[i]!.kill() 
-        serviceProcs[i] = null 
-      } catch { serviceProcs[i] = null }
-    }
+  logAll('Killing processes by port (2x)...')
+  await killPorts()
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  await killPorts()
+  await new Promise(resolve => setTimeout(resolve, 2000))
+  for (let i = 0; i < 3; i++) {
+    serviceProcs[i] = null
     services[i].status = 'stopped'
   }
-  logAll('Waiting for processes to exit...')
-  await new Promise(resolve => setTimeout(resolve, 3000))
-  await killPorts()
   logAll('=== STOPPED ===')
-  checkAll()
   send()
 }
 
