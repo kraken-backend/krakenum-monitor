@@ -169,7 +169,17 @@ logAll('Starting tunnels + Vercel deploy...')
 async function stopAll() {
   logAll('=== STOP ===')
   allReady = false
-  for (let i = 0; i < 3; i++) { if (serviceProcs[i]) { try { serviceProcs[i]!.kill() } catch {} serviceProcs[i] = null }; services[i].status = 'stopped' }
+  for (let i = 0; i < 3; i++) { 
+    if (serviceProcs[i]) { 
+      try { 
+        serviceProcs[i]!.kill() 
+        serviceProcs[i] = null 
+      } catch { serviceProcs[i] = null }
+    }
+    services[i].status = 'stopped'
+  }
+  logAll('Waiting for processes to exit...')
+  await new Promise(resolve => setTimeout(resolve, 3000))
   await killPorts()
   logAll('=== STOPPED ===')
   checkAll()
