@@ -20,6 +20,7 @@ interface ServiceInfo { name: string; status: S; port: number; url: string; log:
 let allReady = false
 
 const services: ServiceInfo[] = [
+  { name: 'Startup', status: 'stopped', port: 0, url: '', log: [] },
   { name: 'Rust Node', status: 'stopped', port: 8088, url: '/gateway/status?mode=api', log: [] },
   { name: 'Go Gateway', status: 'stopped', port: 8090, url: '/gateway/status?mode=api', log: [] },
   { name: 'Wallet BE', status: 'stopped', port: 8098, url: '/api/health', log: [] },
@@ -41,12 +42,7 @@ function log(i: number, msg: string) {
   send()
 }
 
-function logAll(msg: string) {
-  const t = new Date().toLocaleTimeString()
-  const line = `[${t}] ${msg.slice(0, 300)}`
-  for (let i = 0; i < services.length; i++) { services[i].log.push(line); if (services[i].log.length > 200) services[i].log.shift() }
-  if (mainWindow && !mainWindow.isDestroyed()) send()
-}
+function logAll(msg: string) { log(0, msg) }
 
 function send() {
   const data = { services: services.map((s, i) => ({ name: s.name, status: s.status, port: s.port, logs: s.log.slice(-50) })), allReady }
@@ -54,8 +50,10 @@ function send() {
 }
 
 async function verify(i: number): Promise<boolean> {
+  const port = services[i].port
+  if (!port) return true
   return new Promise(r => {
-    const c = net.createConnection(services[i].port, '127.0.0.1')
+    const c = net.createConnection(port, '127.0.0.1')
     c.setTimeout(3000)
     c.on('connect', () => { c.destroy(); r(true) })
     c.on('timeout', () => { c.destroy(); r(false) })
@@ -64,7 +62,7 @@ async function verify(i: number): Promise<boolean> {
 }
 
 async function killPorts() {
-  logAll('Kill ports...')
+  log(0, 'Kill ports...')
   const ps = [8088, 8090, 8098]
   for (let pi = 0; pi < ps.length; pi++) {
     try {
@@ -80,7 +78,7 @@ async function killPorts() {
 }
 
 async function checkAll() {
-  for (let i = 0; i < services.length; i++) {
+  for (let i = 1; i <= 3; i++) {
     if (services[i].status === 'stopped') continue
     services[i].status = await verify(i) ? 'running' : 'error'
   }
@@ -89,50 +87,53 @@ async function checkAll() {
 
 async function startAll() {
   logAll('=== START ===')
+  log(0, '=== START ALL ===')
   await killPorts()
   await new Promise(resolve => setTimeout(resolve, 2000))
   
+  log(0, 'Starting backend services...')
   const dirs = ['D:/upwork/KVP/Codes/MainKVP2026/backend-rust-node', 'D:/upwork/KVP/Codes/MainKVP2026/backend-go-gateway', 'D:/upwork/KVP/Codes/WalletKVP2026/backend-go']
   const cmds = [['cargo', 'run'], ['go', 'run', '.'], ['go', 'run', '.']]
   const envs = [undefined, undefined, { ...process.env, PORT: '8098', KVC_API_BASE: 'http://localhost:8090' }]
   
-  for (let i = 0; i < 3; i++) {
-    services[i].status = 'starting'
-    services[i].log = []
-    log(i, 'Starting...')
-    serviceProcs[i] = spawn(cmds[i][0], cmds[i].slice(1), { cwd: dirs[i], shell: true, env: envs[i] })
-    serviceProcs[i].stdout?.on('data', d => log(i, d.toString()))
-    serviceProcs[i].stderr?.on('data', d => log(i, d.toString()))
-    serviceProcs[i].on('close', code => { services[i].status = code === 0 ? 'stopped' : 'error'; serviceProcs[i] = null; checkAll() })
-    serviceProcs[i].on('error', err => { services[i].status = 'error'; log(i, err.message); serviceProcs[i] = null; checkAll() })
+  for (let i = 1; i <= 3; i++) {
+    const idx = i
+    services[idx].status = 'starting'
+    services[idx].log = []
+    log(idx, 'Starting...')
+    serviceProcs[idx-1] = spawn(cmds[i-1][0], cmds[i-1].slice(1), { cwd: dirs[i-1], shell: true, env: envs[i-1] })
+    serviceProcs[idx-1]?.stdout?.on('data', d => log(idx, d.toString()))
+    serviceProcs[idx-1]?.stderr?.on('data', d => log(idx, d.toString()))
+    serviceProcs[idx-1]?.on('close', code => { services[idx].status = code === 0 ? 'stopped' : 'error'; serviceProcs[idx-1] = null; checkAll() })
+    serviceProcs[idx-1]?.on('error', err => { services[idx].status = 'error'; log(idx, err.message); serviceProcs[idx-1] = null; checkAll() })
     await new Promise(resolve => setTimeout(resolve, 2500))
   }
   
-  logAll('Waiting services...')
+log(0, 'Waiting services...')
   for (let w = 0; w < 8; w++) {
     await new Promise(resolve => setTimeout(resolve, 1000))
     let ok = true
-    for (let i = 0; i < 3; i++) { if (services[i].status !== 'running') services[i].status = await verify(i) ? 'running' : 'starting'; ok = ok && services[i].status === 'running' }
+    for (let i = 1; i <= 3; i++) { if (services[i].status !== 'running') services[i].status = await verify(i) ? 'running' : 'starting'; ok = ok && services[i].status === 'running' }
     send()
     if (ok) break
   }
   
-logAll('Starting tunnels + Vercel deploy...')
+  log(0, 'Starting tunnels + Vercel deploy...')
   const script = 'D:/upwork/KVP/Codes/start_tunnels_and_deploy.ps1'
   const proc = spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-File', script], { cwd: 'D:/upwork/KVP/Codes', shell: true })
   proc.stdout?.on('data', d => logAll('Tunnel: ' + d.toString().slice(0, 200)))
-  proc.stderr?.on('data', d => logAll('Tunnel error: ' + d.toString().slice(0, 200)))
+  proc.stderr?.on('data', d => log(0, 'Tunnel error: ' + d.toString().slice(0, 200)))
   
-  logAll('Waiting for Vercel deployment (~45s)...')
+  log(0, 'Waiting for Vercel deployment (~45s)...')
   await new Promise(resolve => setTimeout(resolve, 45000))
   
-  logAll('Verifying Vercel deployment...')
+  log(0, 'Verifying Vercel deployment...')
   const vercelToken = process.env.VERCEL_TOKEN
   const blockchainProj = process.env.VERCEL_BLOCKCHAIN_PROJ
   const walletProj = process.env.VERCEL_WALLET_PROJ
   
   if (!vercelToken || !blockchainProj || !walletProj) {
-    logAll('=== MISSING ENV: VERCEL_TOKEN, VERCEL_BLOCKCHAIN_PROJ, VERCEL_WALLET_PROJ ===')
+    log(0, '=== MISSING ENV: VERCEL_TOKEN, VERCEL_BLOCKCHAIN_PROJ, VERCEL_WALLET_PROJ ===')
     return
   }
   
@@ -170,19 +171,19 @@ logAll('Starting tunnels + Vercel deploy...')
 }
 
 async function stopAll() {
-  logAll('=== STOP ===')
+  log(0, '=== STOP ===')
   allReady = false
   if (checkInterval) { clearInterval(checkInterval); checkInterval = null }
-  logAll('Killing processes by port (2x)...')
+  log(0, 'Killing processes by port (2x)...')
   await killPorts()
   await new Promise(resolve => setTimeout(resolve, 1500))
   await killPorts()
   await new Promise(resolve => setTimeout(resolve, 2000))
-  for (let i = 0; i < 3; i++) {
-    serviceProcs[i] = null
+  for (let i = 1; i <= 3; i++) {
+    serviceProcs[i-1] = null
     services[i].status = 'stopped'
   }
-  logAll('=== STOPPED ===')
+  log(0, '=== STOPPED ===')
   send()
 }
 
