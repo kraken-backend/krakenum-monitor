@@ -27,6 +27,7 @@ const services: ServiceInfo[] = [
 
 let mainWindow: BrowserWindow | null = null
 let serviceProcs: (ChildProcess | null)[] = [null, null, null]
+let checkInterval: NodeJS.Timeout | null = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({ width: 1100, height: 800, title: 'Krakenum Monitor', webPreferences: { preload: path.join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false } })
@@ -171,6 +172,7 @@ logAll('Starting tunnels + Vercel deploy...')
 async function stopAll() {
   logAll('=== STOP ===')
   allReady = false
+  if (checkInterval) { clearInterval(checkInterval); checkInterval = null }
   logAll('Killing processes by port (2x)...')
   await killPorts()
   await new Promise(resolve => setTimeout(resolve, 1500))
@@ -188,5 +190,5 @@ ipcMain.handle('get-status', () => ({ services: services.map((s, i) => ({ name: 
 ipcMain.on('start-all', () => startAll())
 ipcMain.on('stop-all', () => stopAll())
 
-app.whenReady().then(() => { createWindow(); setInterval(checkAll, 5000) })
-app.on('window-all-closed', () => { stopAll(); app.quit() })
+app.whenReady().then(() => { createWindow(); checkInterval = setInterval(checkAll, 5000) })
+app.on('window-all-closed', () => { stopAll(); if (checkInterval) clearInterval(checkInterval); app.quit() })
